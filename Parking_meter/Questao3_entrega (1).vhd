@@ -1,5 +1,4 @@
---Sistemas Digitais I, Segunda avaliacao, 2022
---Jean Pietro Colet De Carli - 19101732
+
 
 LIBRARY ieee;
 USE ieee.std_logic_1164.ALL;
