@@ -1,5 +1,4 @@
---PROVA DE SISTEMAS DIGITAIS 1, 2022, JEAN PIETRO COLET DE CARLI - 19101732
---QUEST√O 2, Segunda Avaliacao
+
 
 LIBRARY IEEE;
 USE IEEE.STD_LOGIC_1164.ALL;
@@ -8,7 +7,7 @@ use ieee. numeric_std.all;
 ENTITY Q2 IS
   PORT(
     X: IN STD_LOGIC := '0'; --Variavel de selecao
-    Z: OUT STD_LOGIC := '0'; --Vari·vel de saÌda
+    Z: OUT STD_LOGIC := '0'; --Vari√°vel de sa√≠da
     clk: IN STD_LOGIC; --Clock
     rst: IN STD_LOGIC := '0' --Reset
     );
