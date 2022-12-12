@@ -7,4 +7,4 @@ The VHDL file is a description of a FSM (Finite State Machine) simplified with t
 This file contain the code for a one set function, simplified via Karnaugh Map and a 8x1 Multiplexer.
 
 ## Parking_Meter
-The code inside this file is a description of a fully functioning Parking Meter, ready to be implemented with FPGA.
+The code inside this file is a description of a fully functioning Parking Meter, ready to be implemented through FPGA.
