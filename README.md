@@ -1,5 +1,4 @@
-### All the folders contain a file that describes the functionality of the code, and a _tb (testbench) file that will test the code's functionality, when running
-the code in any simulator, allways run the _tb file.
+### All the folders contain a file that describes the functionality of the code, and a _tb (testbench) file that will test the code's functionality, when running the code in any simulator, allways run the _tb file.
 
 ## Flip-Flop_D
 The VHDL file is a description of a FSM (Finite State Machine) simplified with the logic circuit of a Flip-Flop_D.
