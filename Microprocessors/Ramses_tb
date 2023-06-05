@@ -1,0 +1,40 @@
+-- Biblioteca bÃ¡sica para tipo std_logic
+LIBRARY ieee;
+USE ieee.std_logic_1164.ALL;
+USE ieee.std_logic_unsigned.ALL;
+-- Biblioteca para uso de memÃ³ria embarcada em FPGA Altera
+LIBRARY altera_mf;
+USE altera_mf.ALL;
+
+ENTITY ADD_tb IS
+END ADD_tb;
+
+ARCHITECTURE func OF ADD_tb IS
+
+COMPONENT ADD
+  PORT(
+  clock : IN std_logic; --  Sinal de sincronismo
+	reset : IN std_logic; -- Sinal de (re)inicializaÃ§Ã£o
+	BYTE1 : OUT std_logic_vector(7 DOWNTO 0); -- Primeiro Byte
+  BYTE2 : OUT std_logic_vector(7 DOWNTO 0)  -- Segundo Byte 
+  );
+END COMPONENT;
+
+SIGNAL clk : std_logic := '0';
+SIGNAL rst : std_logic := '1';
+SIGNAL B1 : std_logic_vector(7 DOWNTO 0):= (OTHERS => '0');
+SIGNAL B2 : std_logic_vector(7 DOWNTO 0):= (OTHERS => '0');
+
+BEGIN
+
+DUT: ADD PORT MAP (clk, rst, B1, B2);
+
+rst <= '0' AFTER 1120 ns;
+
+PROCESS(clk)
+BEGIN
+  clk <= not clk AFTER 10 ns;
+END PROCESS;
+
+END func;
+
