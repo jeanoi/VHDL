@@ -1,0 +1,47 @@
+-- DescriÃ§Ã£o: Testbench do circuito para busca de instruÃ§Ãµes no RAMSES
+-- Nome: busca_tb.vhd
+-- Autor: Denis Franco
+-- VersÃ£o: 1.1 - 24/04/2022
+
+-- Biblioteca bÃ¡sica para tipo std_logic
+LIBRARY ieee;
+USE ieee.std_logic_1164.ALL;
+USE ieee.std_logic_unsigned.ALL;
+LIBRARY altera_mf;
+USE altera_mf.ALL;
+
+ENTITY MIPS_tb IS
+END MIPS_tb;
+
+ARCHITECTURE test OF MIPS_tb IS
+
+COMPONENT MIPS
+  PORT(
+  clock : IN std_logic; --  Sinal de sincronismo
+	reset : IN std_logic; -- Sinal de (re)inicializaÃ§Ã£o
+	inst : OUT std_logic_vector(31 DOWNTO 0); -- Dado de saÃ­da da memÃ³ria
+	R10: OUT std_logic_vector(31 DOWNTO 0);
+  R11: OUT std_logic_vector(31 DOWNTO 0);
+  R12: OUT std_logic_vector(31 DOWNTO 0)
+	  );
+END COMPONENT;
+
+SIGNAL clk : std_logic := '0';
+SIGNAL rst : std_logic := '0';
+SIGNAL instr : std_logic_vector(31 DOWNTO 0);
+SIGNAL RG10: std_logic_vector(31 DOWNTO 0);
+SIGNAL RG11: std_logic_vector(31 DOWNTO 0);
+SIGNAL RG12: std_logic_vector(31 DOWNTO 0);
+
+BEGIN
+
+DUT: MIPS PORT MAP (clk, rst, instr, RG10, RG11, RG12);
+
+rst <= '1' AFTER 85 ns;
+
+PROCESS(clk)
+BEGIN
+  clk <= not clk AFTER 10 ns;
+END PROCESS;
+			   
+end test;
