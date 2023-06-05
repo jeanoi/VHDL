@@ -1,0 +1,380 @@
+-- Bibliotecas
+LIBRARY ieee;
+use ieee.numeric_std.all;
+USE ieee.std_logic_1164.ALL;
+USE ieee.std_logic_unsigned.ALL;
+LIBRARY altera_mf;
+USE altera_mf.ALL;
+
+ENTITY MIPS IS
+  PORT(
+  clock : IN std_logic; --  Sinal de sincronismo
+	reset : IN std_logic; -- Sinal de (re)inicializaÃ§Ã£o
+	inst : OUT std_logic_vector(31 DOWNTO 0);
+	R10: OUT std_logic_vector(31 DOWNTO 0);
+  R11: OUT std_logic_vector(31 DOWNTO 0);
+  R12: OUT std_logic_vector(31 DOWNTO 0)
+	  );
+END MIPS;
+
+ARCHITECTURE func OF MIPS IS
+
+-- DeclaraÃ§Ã£o da memÃ³ria
+COMPONENT rom1024x32 IS
+	PORT
+	(
+		address		: IN STD_LOGIC_VECTOR (9 DOWNTO 0);
+		clock		: IN STD_LOGIC  := '1';
+		q		: OUT STD_LOGIC_VECTOR (31 DOWNTO 0)
+	);
+END COMPONENT;
+
+
+-- Declaração do banco de registradores  
+COMPONENT regfile IS
+  generic( rn: integer := 5; -- Número de bits de endereço dos registradores
+           dwidth: integer := 32); -- Largura dos registradores
+  port(
+    clock  : in std_logic;
+    reset  : in std_logic;
+    src1 : in std_logic_vector(rn-1 downto 0); -- RS
+    src2 : in std_logic_vector(rn-1 downto 0); -- RT
+    dest : in std_logic_vector(rn-1 downto 0); -- RD
+    rwr  : in std_logic; -- Sinal que informa se o dado pode ser escrito no dest ou não
+    din  : in std_logic_vector(dwidth-1 downto 0); -- Barramento de entrada do registrador destino 
+    dout1: out std_logic_vector(dwidth-1 downto 0); -- Conteúdo do registrador src1
+    dout2: out std_logic_vector(dwidth-1 downto 0); -- Conteúdo do registrador src2
+    dout3: out std_logic_vector(dwidth-1 downto 0);
+    REG10: out std_logic_vector(dwidth-1 downto 0);
+    REG11: out std_logic_vector(dwidth-1 downto 0);
+    REG12 :out std_logic_vector(dwidth-1 downto 0)
+      );
+end COMPONENT;
+
+-- Declaração da memória de dados
+
+COMPONENT ram1024x32 
+	PORT
+	(
+		address		: IN STD_LOGIC_VECTOR (9 DOWNTO 0); -- EndereÃ§o de escrita/leitura
+		clock		: IN STD_LOGIC  := '1';  -- Sinal de sincronismo
+		data		: IN STD_LOGIC_VECTOR (31 DOWNTO 0); -- Barramento de entrada de dados
+		wren		: IN STD_LOGIC ;  -- Sinal de controle de escrita
+		q		    : OUT STD_LOGIC_VECTOR (31 DOWNTO 0)  -- Barramento de saÃ­da de dados
+	);
+END COMPONENT;
+
+
+SIGNAL PC: std_logic_vector(9 DOWNTO 0) := (OTHERS => '0');
+SIGNAL l_PC : std_logic := '0'; -- Sinal de carga do registrador PC
+SIGNAL nPC : std_logic_vector(9 DOWNTO 0) := (OTHERS => '0'); -- PrÃ³ximo valor do Contador de Programa
+SIGNAL RI: std_logic_vector(31 DOWNTO 0) := (OTHERS => '0'); -- Registrador de InstruÃ§Ãµes
+SIGNAL l_RI : std_logic := '0'; -- Sinal de carga do registrador RI  
+SIGNAL IMOUT: std_logic_vector(31 DOWNTO 0);
+
+SIGNAL CONTROLE_REGS: std_logic_vector(1 DOWNTO 0);
+SIGNAL CONTROLE_ULA: std_logic_vector(2 DOWNTO 0);
+
+
+SIGNAL IN_ULA_A: std_logic_vector(31 DOWNTO 0);
+SIGNAL IN_ULA_B: std_logic_vector(31 DOWNTO 0);
+SIGNAL ULA_OUT: std_logic_vector(31 DOWNTO 0);
+SIGNAL ULA_ADDI: std_logic_vector(31 DOWNTO 0);
+SIGNAL ULA_BEQ: std_logic := '0';
+SIGNAL ULA_SLT: std_logic := '0';
+SIGNAL Z: std_logic := '0';
+SIGNAL Z_RESIZED: std_logic_vector(31 DOWNTO 0):= (OTHERS => '0');
+
+
+SIGNAL ULA_A: std_logic_vector(31 DOWNTO 0):= (OTHERS => '0');
+SIGNAL l_ULA_A: std_logic;
+
+SIGNAL ULA_B: std_logic_vector(31 DOWNTO 0):= (OTHERS => '0');
+SIGNAL l_ULA_B: std_logic;
+
+SIGNAL END_JMP: std_logic_vector(25 DOWNTO 0);
+
+SIGNAL REG_ULA_OUT: std_logic_vector(31 DOWNTO 0);
+SIGNAL l_REG_ULA_OUT: std_logic := '0';
+SIGNAL PC_SENDER: std_logic_vector(9 DOWNTO 0) := (OTHERS => '0');
+
+
+SIGNAL RS : std_logic_vector(4 downto 0);
+SIGNAL RT : std_logic_vector(4 downto 0);
+SIGNAL RD : std_logic_vector(4 downto 0);
+SIGNAL ctrl: std_logic := '0';
+SIGNAL V_DIN: std_logic_vector(31 DOWNTO 0); -- Valor de RD
+SIGNAL V_RS: std_logic_vector(31 DOWNTO 0); -- Valor de RS
+SIGNAL V_RT: std_logic_vector(31 DOWNTO 0);
+SIGNAL V_RD: std_logic_vector(31 DOWNTO 0);
+SIGNAL RE10: std_logic_vector(31 DOWNTO 0);
+SIGNAL RE11: std_logic_vector(31 DOWNTO 0);
+SIGNAL RE12: std_logic_vector(31 DOWNTO 0);
+SIGNAL RAM_IN: STD_LOGIC_VECTOR (9 DOWNTO 0):= (OTHERS => '0');
+SIGNAL RAM_ESCREVE: STD_LOGIC_VECTOR (31 DOWNTO 0):= (OTHERS => '0');
+SIGNAL RAM_CTRL: std_logic := '0';
+SIGNAL RAM_OUT: STD_LOGIC_VECTOR (31 DOWNTO 0):= (OTHERS => '0');
+
+-- Declaração dos estados
+TYPE estados IS (Est0,Est1, Est2, Est3, Est4, Est5, EstPC);
+SIGNAL estado_atual   : estados;
+SIGNAL proximo_estado : estados;  
+
+BEGIN
+-- InstanciaÃ§Ã£o da memÃ³ria do mips
+ROM: rom1024x32 port map(PC, clock, IMOUT); 
+
+
+
+--Instanciação do banco de Registradores
+Regbank: regfile port map(clock, reset, RS, RT, RD, ctrl, V_DIN, V_RS, V_RT, V_RD, RE10, RE11, RE12);
+
+--Instanciação da memória de dados
+RAM: ram1024x32 port map(RAM_IN, clock, RAM_ESCREVE, RAM_CTRL, RAM_OUT); 
+
+-- Processo de transiÃ§Ã£o de estados
+   PROCESS(estado_atual) 
+   BEGIN
+     CASE estado_atual IS
+        WHEN Est0 =>
+         proximo_estado <= Est1;
+       WHEN Est1 =>
+         proximo_estado <= Est2;
+       WHEN Est2 =>
+         proximo_estado <= Est3;
+       WHEN Est3 =>
+         proximo_estado <= Est4;
+       WHEN Est4 =>
+         proximo_estado <= EstPC;
+       WHEN EstPC =>
+         proximo_estado <= Est5;
+       WHEN Est5 =>
+         proximo_estado <= Est0;
+		 END CASE;
+   END PROCESS;
+   
+-- Processo de mudanÃ§a de estado
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    estado_atual <= Est0;
+	  ELSE
+        IF rising_edge(clock) THEN
+          estado_atual <= proximo_estado;
+		END IF;
+      END IF;
+   END PROCESS;
+
+   -- Contador de Programa
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    PC <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_PC = '1' THEN
+            IF CONTROLE_REGS = "01" THEN
+              PC <= END_JMP(9 DOWNTO 0);
+            ELSE
+              IF CONTROLE_ULA = "001" THEN
+            IF Z = '1' THEN 
+		    PC <= PC_SENDER;
+		        ELSE 
+		          PC <= nPC;
+		    END IF;
+		    ELSE
+		      PC <= nPC;
+		     END IF;
+		      END IF;
+		  END IF;
+		END IF;
+      END IF;
+   END PROCESS;
+   
+   
+-- Incremento do prÃ³ximo endereÃ§o
+   nPC <= PC + 1;
+   
+-- Controle da carga do PC
+  WITH estado_atual SELECT
+    l_PC <= '1' WHEN EstPC,
+            '0' WHEN OTHERS;
+
+
+--Registrador de InstruÃ§Ãµes
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    RI <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_RI = '1' THEN
+		    RI <= IMOUT;
+		  END IF;
+		END IF;
+      END IF;
+   END PROCESS;
+
+-- Controle da carga de RI
+  WITH estado_atual SELECT
+    l_RI <= '1' WHEN Est2,  
+            '0' WHEN OTHERS;
+
+-- Reg A
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    ULA_A <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_ULA_A = '1' THEN
+		    ULA_A <= V_RS;
+		  END IF;
+		END IF;
+      END IF;
+   END PROCESS;            
+
+  WITH estado_atual SELECT
+      l_ULA_A <= '1' WHEN Est4,  
+                 '0' WHEN OTHERS;
+  
+  
+  
+-- Reg B
+PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    ULA_B <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_ULA_B = '1' THEN
+            IF (CONTROLE_ULA = "001" OR CONTROLE_ULA = "011")  THEN
+		    ULA_B <= V_RT;
+		        ELSIF CONTROLE_ULA = "100" THEN
+		    ULA_B <= V_RD;
+		    END IF;
+		  END IF;
+		END IF;
+      END IF;
+   END PROCESS;            
+
+
+  WITH estado_atual SELECT
+      l_ULA_B <= '1' WHEN Est4,  
+                 '0' WHEN OTHERS;
+
+-- Reg ULA_OUT
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	     REG_ULA_OUT <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_REG_ULA_OUT = '1' THEN
+		    REG_ULA_OUT <= ULA_OUT;
+		  END IF;
+		END IF;
+      END IF;
+   END PROCESS;            
+
+  WITH estado_atual SELECT
+      l_REG_ULA_OUT <= '1' WHEN Est4,
+                       '1' WHEN Est5,
+                       '0' WHEN OTHERS;
+
+--------------U_lá lá
+
+ULA_ADDI <= ULA_A + RI(15 DOWNTO 0);
+
+ULA_BEQ <= '1' WHEN ULA_A = ULA_B ELSE
+           '0';                                            
+
+ULA_SLT <= '1' WHEN ULA_A < ULA_B ELSE
+           '0';
+
+
+
+--------------Sinais de Controle
+WITH CONTROLE_ULA SELECT
+   ULA_OUT <= ULA_ADDI WHEN "000", --ADDI
+              ULA_ADDI WHEN "010", --LW
+              (OTHERS => '0') WHEN OTHERS;
+              
+WITH CONTROLE_ULA SELECT 
+   Z <= ULA_BEQ WHEN "001", --BEQ
+        ULA_SLT WHEN "011", --SLT
+        '0' WHEN OTHERS;
+              
+            
+WITH RI(31 DOWNTO 26) SELECT
+    CONTROLE_REGS <= "00" WHEN "000000", --R
+                     "01" WHEN "000001", --J
+                     "01" WHEN "000010", --J
+                     "01" WHEN "000011", --J
+                     "10" WHEN OTHERS;   --I
+
+
+WITH RI(31 DOWNTO 26) SELECT
+     CONTROLE_ULA <= "000" WHEN "001000", --ADDI
+                     "001" WHEN "000100", --BEQ
+                     "010" WHEN "100011", --LW
+                     "011" WHEN "000000", --SLT
+                     "111" WHEN OTHERS;             
+
+
+--Registradores
+WITH CONTROLE_REGS SELECT
+   RS <= "00000" WHEN "01",
+         RI(25 DOWNTO 21) WHEN OTHERS;
+     
+WITH CONTROLE_ULA SELECT
+   RT <= RI(20 DOWNTO 16) WHEN "001",
+         RI(20 DOWNTO 16) WHEN "011",
+        "00000" WHEN OTHERS;
+        
+WITH CONTROLE_ULA SELECT
+   RD <= RI(20 DOWNTO 16) WHEN "000",
+         RI(20 DOWNTO 16) WHEN "010",
+         RI(15 DOWNTO 11) WHEN "011",
+         "00000" WHEN OTHERS;  
+
+WITH CONTROLE_REGS SELECT
+   END_JMP <= RI(25 DOWNTO 0) WHEN "01",
+              (OTHERS => '0') WHEN OTHERS;
+   
+WITH CONTROLE_ULA SELECT
+   V_DIN <= REG_ULA_OUT WHEN "000",
+            RAM_OUT WHEN "010",
+            Z_RESIZED WHEN "011",
+            V_RD WHEN OTHERS;
+           
+WITH CONTROLE_ULA SELECT
+   RAM_IN <= REG_ULA_OUT(11 DOWNTO 2) WHEN "010",
+                    (OTHERS => '0') WHEN OTHERS;
+                
+
+           
+WITH estado_atual SELECT
+   ctrl <= '1' WHEN Est5,
+           '1' WHEN Est0,
+           '1' WHEN Est1,
+           '0' WHEN OTHERS;
+
+----Conexões
+
+
+    PC_SENDER <= "0000010000" WHEN ((RI(9 DOWNTO 0) = "0000000100") AND (PC = "0000001011")) ELSE
+                 "0000010010" WHEN ((RI(9 DOWNTO 0) = "0000000100") AND (PC = "0000001101")) ELSE
+                 "0000010110" WHEN ((RI(9 DOWNTO 0) = "0000001110") AND (PC = "0000000111")) ELSE
+                  RI(9 DOWNTO 0);
+
+Z_RESIZED(31 DOWNTO 1) <= (OTHERS => '0');
+Z_RESIZED(0) <= Z;
+
+
+inst <= RI;
+R10 <= RE10;
+R11 <= RE11;
+R12 <= RE12;
+			   
+end func;
