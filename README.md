@@ -8,3 +8,6 @@ This file contain the code for a one set function, simplified via Karnaugh Map a
 
 ## Parking_Meter
 The code inside this file is a description of a fully functioning Parking Meter, ready to be implemented through FPGA.
+
+## Microprocessors
+The code inside this file is a description of the hardware architecture of two microprocessors.
