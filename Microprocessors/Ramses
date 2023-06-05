@@ -1,0 +1,381 @@
+-- DescriÃ§Ã£o: Circuito para busca de instruÃ§Ãµes no RAMSES
+-- Nome: busca.vhd
+-- Autor: Denis Franco
+-- VersÃ£o: 1.1 - 24/04/2022
+
+-- Bibliotecas bÃ¡sicas para tipo std_logic
+LIBRARY ieee;
+USE ieee.std_logic_1164.ALL;
+USE ieee.std_logic_unsigned.ALL;
+-- Biblioteca para uso de memÃ³ria embarcada em FPGA Altera
+LIBRARY altera_mf;
+USE altera_mf.ALL;
+
+ENTITY ADD IS
+  PORT(
+  clock : IN std_logic; --  Sinal de sincronismo
+	reset : IN std_logic; -- Sinal de (re)inicializaÃ§Ã£o
+	BYTE1 : OUT std_logic_vector(7 DOWNTO 0); -- Primeiro Byte
+  BYTE2 : OUT std_logic_vector(7 DOWNTO 0)  -- Segundo Byte 
+  );
+END ADD;
+
+ARCHITECTURE func OF ADD IS
+
+COMPONENT ram256x8
+	PORT
+	(
+		address		: IN STD_LOGIC_VECTOR (7 DOWNTO 0);
+		clock		: IN STD_LOGIC  := '1';
+		data		: IN STD_LOGIC_VECTOR (7 DOWNTO 0);
+		wren		: IN STD_LOGIC ;
+		q		  : OUT STD_LOGIC_VECTOR (7 DOWNTO 0)
+	);
+END COMPONENT;
+
+-- DeclaraÃ§Ã£o dos sinais de conexÃ£o com a memÃ³ria
+  SIGNAL MEMout: std_logic_vector(7 DOWNTO 0) := (OTHERS => '0'); -- Barramento de saÃ­da da memÃ³ria
+  SIGNAL write_en: std_logic := '0'; -- Sinal de escrita na memÃ³ria 
+  
+  
+-- DeclaraÃ§Ã£o dos sinais e registradores internos
+  SIGNAL PC: std_logic_vector(7 DOWNTO 0) := (OTHERS => '0'); -- Registrador Contador de Programa
+  SIGNAL l_PC : std_logic := '0'; -- Sinal de carga do registrador PC
+  SIGNAL nPC : std_logic_vector(7 DOWNTO 0) := (OTHERS => '0'); -- PrÃ³ximo valor do Contador de Programa
+  
+  SIGNAL RREM: std_logic_vector(7 DOWNTO 0) := (OTHERS => '0'); -- Registrador de EndereÃ§os da MemÃ³ria
+  SIGNAL l_RREM : std_logic := '0'; -- Sinal de carga do registrador RREM
+  SIGNAL RREM_MUX: std_logic_vector(1 DOWNTO 0); --Sinal de seleção do mux adicionado
+  
+  SIGNAL RDMin: std_logic_vector(7 DOWNTO 0) := (OTHERS => '0'); -- Registrador de Dados de Entrada da MemÃ³ria
+  SIGNAL l_RDMin : std_logic := '0'; -- Sinal de carga do registrador RDMin
+  SIGNAL RDMout: std_logic_vector(7 DOWNTO 0) := (OTHERS => '0'); -- Registrador de Dados de SaÃ­da da MemÃ³ria
+  SIGNAL l_RDMout : std_logic := '0'; -- Sinal de carga do registrador RDMout
+  SIGNAL RI: std_logic_vector(7 DOWNTO 0) := (OTHERS => '0'); -- Registrador de InstruÃ§Ãµes
+  SIGNAL l_RI : std_logic := '0'; -- Sinal de carga do registrador RI
+  
+  SIGNAL AUX: std_logic_vector(1 DOWNTO 0); -- Sinal para testar a instrução e o registrador
+  SIGNAL AUX2: std_logic_vector(1 DOWNTO 0); -- Sinal para testar o modo de endereçamento
+  
+  SIGNAL l_REG: std_logic := '0'; -- Sinal de carga dos Registradores
+  
+  SIGNAL REGB2: std_logic_vector(7 DOWNTO 0) := (OTHERS => '0'); -- Registrador para o Byte 2
+  SIGNAL l_REGB2: std_logic := '0';
+
+  SIGNAL REGA: std_logic_vector(7 DOWNTO 0) := "00000011"; --Registrador A
+  
+  SIGNAL REGB: std_logic_vector(7 DOWNTO 0) := "00000011"; --Registrador B
+  
+  SIGNAL REGX: std_logic_vector(7 DOWNTO 0) := "00000001"; --Registrador X
+  
+  -- DeclaraÃ§Ã£o dos estados da mÃ¡quina de controle
+  TYPE estados IS (Est0, Est1, Est2, Est3, Est4, Est5, Est6, Est7, Est8, Est9, Est10, Est11, Est12, Est13, Est14, Est15, Est16, Est17, Est18, Est19, Est20, Est21);
+  SIGNAL estado_atual   : estados;
+  SIGNAL proximo_estado : estados; 
+  
+  
+  BEGIN
+-- InstanciaÃ§Ã£o da memÃ³ria do RAMSES
+Memoria: ram256x8 port map(RREM, clock, RDMin, write_en, MEMout); 
+
+PROCESS(estado_atual)
+   BEGIN
+     CASE estado_atual IS
+       WHEN Est0 =>
+         proximo_estado <= Est1;
+       WHEN Est1 =>
+         proximo_estado <= Est2;
+       WHEN Est2 =>
+         proximo_estado <= Est3;
+       WHEN Est3 =>
+         proximo_estado <= Est4;
+       WHEN Est4 =>
+         proximo_estado <= Est5;
+       WHEN Est5 =>
+         proximo_estado <= Est6;
+       WHEN Est6 =>
+         IF AUX = "11" THEN 
+           proximo_estado <= Est21;
+         ELSE
+              proximo_estado <= Est7;
+         END IF;
+       WHEN Est7 =>
+         IF AUX2 = "10" THEN 
+           proximo_estado <= Est16;
+         ELSIF AUX2 = "11" THEN
+           proximo_estado <= Est17;
+         ELSE
+          proximo_estado <= Est8;
+         END IF;
+       WHEN Est8 =>
+         proximo_estado <= Est9;
+       WHEN Est9 =>
+         proximo_estado <= Est10;
+       WHEN Est10 =>
+         IF AUX2 = "00" THEN
+            proximo_estado <= Est11;
+         ELSIF AUX2 = "01" THEN
+            proximo_estado <= Est12;
+         END IF;
+       WHEN Est11 =>
+          proximo_estado <= Est0;
+       WHEN Est12 =>
+         proximo_estado <= Est13;
+       WHEN Est13 =>
+         proximo_estado <= Est14;
+        WHEN Est14 =>
+         proximo_estado <= Est15;
+       WHEN Est15 => 
+         proximo_estado <= Est0;
+       WHEN Est16 =>
+         proximo_estado <= Est0;
+       WHEN Est17 =>
+         proximo_estado <= Est18;
+       WHEN Est18 =>
+         proximo_estado <= Est19;
+       WHEN Est19 =>
+         proximo_estado <= Est20;
+       WHEN Est20 =>
+         proximo_estado <= Est0;
+       WHEN Est21 =>
+         proximo_estado <= Est21;
+		 END CASE;
+   END PROCESS;
+
+-- Processo de mudanÃ§a de estado
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    estado_atual <= Est0;
+	  ELSE
+        IF rising_edge(clock) THEN
+          estado_atual <= proximo_estado;
+		END IF;
+      END IF;
+   END PROCESS;
+
+   -- Contador de Programa
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    PC <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_PC = '1' THEN
+		    PC <= nPC;
+		  END IF;
+		END IF;
+      END IF;
+   END PROCESS;
+
+-- Incremento do prÃ³ximo endereÃ§o
+   nPC <= PC + 1;
+
+-- Controle da carga do PC
+  WITH estado_atual SELECT
+    l_PC <= '1' WHEN Est2,
+            '1' WHEN Est6,
+            '0' WHEN OTHERS;
+            
+-- Registrador de endereÃ§os de MemÃ³ria
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    RREM <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_RREM = '1' THEN
+            
+            IF RREM_MUX = "00" THEN
+             RREM <= PC;
+           ELSIF RREM_MUX = "01" THEN
+             RREM <= RDMout;
+           ELSIF RREM_MUX = "10" THEN
+             RREM <=  RDMout + REGX;
+          END IF;
+		  END IF;
+		END IF;
+    END IF;
+   END PROCESS;
+   
+-- Controle da carga de RREM
+  WITH estado_atual SELECT
+    l_RREM <= '1' WHEN Est1,
+              '1' WHEN Est5,
+              '1' WHEN Est8,
+              '1' WHEN Est12,
+              '1' WHEN Est17,
+              '0' WHEN OTHERS;
+              
+--Controle do MUX
+  WITH estado_atual SELECT
+    RREM_MUX <= "00" WHEN Est1,
+                "00" WHEN Est5,
+                "01" WHEN Est8,
+                "01" WHEN Est12,
+                "10" WHEN OTHERS;
+                
+-- Registrador de saÃ­da da MemÃ³ria
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    RDMout <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_RDMout = '1' THEN
+		    RDMout <= MEMout;
+		  END IF;
+		END IF;
+      END IF;
+   END PROCESS;
+
+-- Controle da carga de RDMout
+  WITH estado_atual SELECT
+    l_RDMout <= '1' WHEN Est3,
+                '1' WHEN Est7,
+                '1' WHEN Est10,
+                '1' WHEN Est14,
+                '1' WHEN Est19,
+                '0' WHEN OTHERS;
+                
+-- Registrador de InstruÃ§Ãµes
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    RI <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_RI = '1' THEN
+		    RI <= RDMout;
+		  END IF;
+		END IF;
+      END IF;
+   END PROCESS;
+
+-- Controle da carga de RI
+  WITH estado_atual SELECT
+    l_RI <= '1' WHEN Est4,
+            '0' WHEN OTHERS;             
+
+-- Registrador Byte2
+   PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    REGB2 <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_REGB2 = '1' THEN
+		    REGB2 <= RDMout;
+		  END IF;
+		END IF;
+      END IF;
+   END PROCESS;
+
+-- Controle da carga do REGB2
+  WITH estado_atual SELECT
+    l_REGB2 <= '1' WHEN Est8,
+               '1' WHEN Est16,
+               '1' WHEN Est17,
+               '0' WHEN OTHERS; 
+
+-- Teste dos primeiros bits 5 a 2 bits para saber o registrador
+WITH RI(5 DOWNTO 2) SELECT
+  AUX <= "00" WHEN "1100", --Reg A
+         "01" WHEN "1101", --Reg B
+         "10" WHEN "1110", --Reg X
+         "11" WHEN OTHERS; --Cancela Operação
+         
+-- Teste dos bits 1 a 0 para saber o modo de endereçamento
+WITH RI(1 DOWNTO 0) SELECT
+  AUX2 <= "00" WHEN "00", --Modo direto 
+          "01" WHEN "01", --Modo indireto
+          "10" WHEN "10", --Modo imediado
+          "11" WHEN OTHERS; --Modo indexado
+
+         
+-- Reg A
+PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    REGA <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_REG = '1' THEN
+            
+            IF AUX = "00" THEN
+              
+              IF AUX2 = "11" THEN
+                REGA <= RDMout;
+              ELSE
+                REGA <= REGA + RDMOUT;
+		          END IF;
+		          
+		          
+		        END IF;
+		    END IF;
+		  END IF;
+      END IF;
+   END PROCESS;
+
+-- Reg B
+PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    REGB <= (OTHERS => '0');
+	  ELSE
+        IF rising_edge(clock) THEN
+          IF l_REG = '1' THEN
+            IF AUX = "01" THEN
+              
+              IF AUX2 = "11" THEN
+                REGB <= RDMout;
+              ELSE
+                REGB <= REGB + RDMOUT;
+		          END IF;
+		          
+		          
+		        END IF;
+		    END IF;
+		  END IF;
+      END IF;
+   END PROCESS;
+
+-- Reg X
+PROCESS(clock, reset)
+   BEGIN
+      IF reset = '0' THEN
+	    REGX <= (OTHERS => '0');
+	  ELSE
+
+        IF rising_edge(clock) THEN
+          IF l_REG = '1' THEN
+            IF AUX = "10" THEN
+              
+              IF AUX2 = "10" THEN
+                REGX <= RDMout;
+              ELSE
+                REGX <= REGX + RDMOUT;
+		          END IF;
+		          
+		          
+		        END IF;
+		    END IF;
+		  END IF;
+		  END IF;
+   END PROCESS;
+
+
+-- Controle da carga dos Registradores
+WITH estado_atual SELECT
+    l_REG <= '1' WHEN Est11,
+             '1' WHEN Est15,
+             '1' WHEN Est16,
+             '1' WHEN Est20,
+             '0' WHEN OTHERS;
+
+
+--Saída dos dados
+BYTE1 <= RI;
+BYTE2 <= REGB2;
+
+END func;
